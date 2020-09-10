@@ -209,7 +209,11 @@ if __name__ == '__main__':
     result_dir = "result"
     pdb = PersonDB()
     pdb.load_db(result_dir)
-    pdb.print_persons()
+    # pdb.print_persons()
+    for person in pdb.persons:
+        if person.name in name_list:
+            idx = name_list.index(person.name)
+            name_list.pop(idx)
 
     fc = FaceClassifier(_args.threshold, _args.resize_ratio)
     frame_idx = 0
