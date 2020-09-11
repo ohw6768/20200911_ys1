@@ -125,6 +125,8 @@ if __name__ == '__main__':
     # 동영상 파일 경로. 웹캠에서 프레임을 받아올 경우 0으로 지정
     # args.add_argument("inputfile",
     #                   help="video file to detect or '0' to detect from web cam")
+    args.add_argument("-i", "--inputfile", required=False,
+                      help="video file to detect")
     # 인식된 얼굴간의 유사도를 비교할 기준.
     # 값이 높을 경우 서로 다른 사람을 같은 사람으로 인식할 수 있음
     args.add_argument("-t", "--threshold", default=0.44, type=float,
@@ -184,7 +186,10 @@ if __name__ == '__main__':
     # if src == '0':
     #     print('[INFO] Detect from web cam')
 
-    src = os.path.join('video', 'hyeri1_cut.mp4')
+    if _args.inputfile:
+        src = _args.inputfile
+    else:
+        src = os.path.join('video', 'hyeri1_cut.mp4')
     video = cv2.VideoCapture(src)
     if not video.isOpened():
         if src == '0':
