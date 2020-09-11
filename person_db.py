@@ -107,12 +107,10 @@ class PersonDB:
         self.encoding_file = encoding_file
         self.unknown = Person(self.unknown_dir)
         self.known_name = []
+        self.new_name = []
 
     def add_person(self, person):
         self.persons.append(person)
-
-    def add_name(self, name):
-        self.known_name.append(name)
 
     def load_db(self, dirname):
         if not os.path.isdir(dirname):
@@ -139,6 +137,7 @@ class PersonDB:
                     self.unknown = person
                 else:
                     self.add_person(person)
+                    self.known_name.append(person.name)
 
     def save_encodings(self, dirname):
         face_encodings = {}

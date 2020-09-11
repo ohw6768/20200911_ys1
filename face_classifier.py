@@ -122,19 +122,19 @@ if __name__ == '__main__':
 
     args = argparse.ArgumentParser()
     # 동영상 파일 경로. 웹캠에서 프레임을 받아올 경우 0으로 지정
-    args.add_argument("inputfile",
-                      help="video file to detect or '0' to detect from web cam")
+    # args.add_argument("inputfile",
+    #                   help="video file to detect or '0' to detect from web cam")
     # 인식된 얼굴간의 유사도를 비교할 기준.
     # 값이 높을 경우 서로 다른 사람을 같은 사람으로 인식할 수 있음
     args.add_argument("-t", "--threshold", default=0.44, type=float,
                       help="threshold of the similarity (default=0.44)")
-    args.add_argument("-S", "--seconds", default=1, type=float,
+    args.add_argument("-S", "--seconds", default=0, type=float,
                       help="seconds between capture")
     args.add_argument("-s", "--stop", default=0, type=int,
                       help="stop detecting after # seconds")
     args.add_argument("-k", "--skip", default=0, type=int,
                       help="skip detecting for # seconds from the start")
-    args.add_argument("-d", "--display", action='store_true',
+    args.add_argument("-nd", "--no-display", action='store_true',
                       help="display the frame in real time")
     args.add_argument("-c", "--capture", type=str,
                       help="save the frames with face in the CAPTURE directory")
@@ -142,8 +142,10 @@ if __name__ == '__main__':
     args.add_argument("-r", "--resize-ratio", default=1.0, type=str,
                       help="resize the frame to process (less time, less accuracy)")
     # 인식할 사람 이름 목록이 있는 텍스트 파일 경로.
-    args.add_argument("-n", "--name", default="", type=str,
+    args.add_argument("-n", "--name", default="person_name.txt", type=str,
                       help="people name to want detect.")
+    args.add_argument("-f", "--frame", default=30, type=int,
+                      help="frames between capture")
     _args = args.parse_args()
 
     if _args.stop < _args.skip:
@@ -175,10 +177,11 @@ if __name__ == '__main__':
         running = False
     prev_handler = signal.signal(signal.SIGINT, signal_handler)
 
-    src = _args.inputfile
-    if src == '0':
-        print('[INFO] Detect from web cam')
+    # src = _args.inputfile
+    # if src == '0':
+    #     print('[INFO] Detect from web cam')
 
+    src = os.path.join('video', 'hyeri1_cut.mp4')
     video = cv2.VideoCapture(src)
     if not video.isOpened():
         if src == '0':
@@ -190,7 +193,10 @@ if __name__ == '__main__':
     frame_width = video.get(cv2.CAP_PROP_FRAME_WIDTH)  # 프레임 가로 크기
     frame_height = video.get(cv2.CAP_PROP_FRAME_HEIGHT)  # 프레임 세로 크기
     frame_rate = video.get(cv2.CAP_PROP_FPS)  # fps
-    capture_interval = int(round(frame_rate * _args.seconds))  # 캡쳐할 프레임 단위
+    if _args.seconds > 0:
+        capture_interval = int(round(frame_rate * _args.seconds))  # 캡쳐할 프레임 단위
+    else:
+        capture_interval = _args.frame
 
     print("============================================================")
     print('Web Cam') if src == '0' else print(src)
@@ -203,22 +209,24 @@ if __name__ == '__main__':
     print(f'Capture every {capture_interval} frame.')
     print(f'Face similarity threshold: {_args.threshold}')
     print("============================================================")
-    if _args.display:
+    if not _args.no_display:
         print('Press Q to stop detecting...')
 
     result_dir = "result"
     pdb = PersonDB()
     pdb.load_db(result_dir)
     # pdb.print_persons()
-    for person in pdb.persons:
-        if person.name in name_list:
-            idx = name_list.index(person.name)
+    for name in pdb.known_name:
+        if name in name_list:
+            idx = name_list.index(name)
             name_list.pop(idx)
 
     fc = FaceClassifier(_args.threshold, _args.resize_ratio)
     frame_idx = 0
     running = True
 
+    detected_named_list = []
+    detected_no_named_list = []
     while running:
         ret, frame = video.read()
         if frame is None:
@@ -239,10 +247,15 @@ if __name__ == '__main__':
         for face in faces:
             person = fc.compare_with_known_persons(face, pdb.persons)
             if person:
+                if person.name not in detected_named_list + detected_no_named_list:
+                    if person.name in pdb.known_name or pdb.new_name:
+                        detected_named_list.append(person.name)
+                    else:
+                        detected_no_named_list.append(person.name)
                 continue
             person = fc.compare_with_unknown_persons(face, pdb.unknown.faces)
             if person:
-                if not is_all_person_detected(name_list, pdb.known_name):
+                if not is_all_person_detected(name_list, pdb.new_name):
                     print('Choose person name. Insert index number or P to pass.')
                     print('index. name')
                     for i, name in enumerate(name_list):
@@ -255,14 +268,14 @@ if __name__ == '__main__':
                         print(f'You choose {selected_index}. {name_list[int(selected_index)]}.')
                         person.set_name(name_list[int(selected_index)])
                         person.descend_last_id()
-                        pdb.add_name(person.name)
+                        pdb.new_name.append(person.name)
                 pdb.add_person(person)
 
-        if _args.display or _args.capture:
+        if not _args.no_display or _args.capture:
             for face in faces:
                 frame = draw_name(frame, face)
 
-        if _args.display:
+        if not _args.no_display:
             cv2.imshow('frame', frame)
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'):
@@ -279,6 +292,12 @@ if __name__ == '__main__':
 
     pdb.save_db(result_dir)
     # pdb.print_persons()
-    print('Detected person list : ')
-    for name in pdb.known_name:
+    print('Detected named person list : ')
+    for name in detected_named_list:
+        if name in pdb.new_name:
+            print(f'{name} (new!)')
+        else:
+            print(name)
+    print('Detected no named person list : ')
+    for name in detected_no_named_list:
         print(name)
