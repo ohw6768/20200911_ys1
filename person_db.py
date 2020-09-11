@@ -7,6 +7,13 @@ import pickle
 from PIL import Image
 
 
+class FaceEncoding:
+    def __init__(self, face_encoding=None, person_name=None, filename=None):
+        self.face_encoding = face_encoding
+        self.person_name = person_name
+        self.filename = filename
+
+
 class Face:
     key = "face_encoding"
 
@@ -61,12 +68,13 @@ class Person:
     def add_face(self, face):
         self.faces.append(face)
 
-    def save_faces(self, basedir):
+    def save_faces(self, basedir, image_save=False):
         filepath = os.path.join(basedir, self.name)
         if not os.path.isdir(filepath):
             os.mkdir(filepath)
-        for face in self.faces:
-            face.save(filepath)
+        if image_save:
+            for face in self.faces:
+                face.save(filepath)
 
     def set_name(self, name):
         self.name = name
@@ -84,17 +92,14 @@ class Person:
     def load(cls, filepath, face_encodings):
         basename = os.path.basename(filepath)
         person = Person(basename)
-        for face_filename in os.listdir(filepath):
-            face_filepath = os.path.join(filepath, face_filename)
-            image = cv2.imdecode(np.fromfile(face_filepath, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
-            if image.size == 0:
-                continue
-            if face_filename in face_encodings:
-                face_encoding = face_encodings[face_filename]
-            else:
-                face_encoding = Face.get_encoding(image)
-            if face_encoding is not None:
-                face = Face(face_filename, image, face_encoding)
+        for fe in face_encodings:
+            if fe.person_name == basename:
+                image_filepath = os.path.join(filepath, fe.filename)
+                if os.path.exists(image_filepath):
+                    image = cv2.imdecode(np.fromfile(image_filepath, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+                else:
+                    image = None
+                face = Face(fe.filename, image, fe.face_encoding)
                 person.faces.append(face)
         person.calculate_average_encoding()
         return person
@@ -140,23 +145,28 @@ class PersonDB:
                     self.known_name.append(person.name)
 
     def save_encodings(self, dirname):
-        face_encodings = {}
+        # face_encodings = {}
+        face_encoding_list = []
         for person in self.persons:
             for face in person.faces:
-                face_encodings[face.filename] = face.encoding
+                face_encoding_list.append(FaceEncoding(face_encoding=face.encoding, person_name=person.name, filename=face.filename))
+                # face_encodings[face.filename] = face.encoding
         for face in self.unknown.faces:
-            face_encodings[face.filename] = face.encoding
+            face_encoding_list.append(FaceEncoding(face_encoding=face.encoding, person_name='unknown', filename=face.filename))
+            # face_encodings[face.filename] = face.encoding
         filepath = os.path.join(dirname, self.encoding_file)
         with open(filepath, 'wb') as f:
-            pickle.dump(face_encodings, f)
+            pickle.dump(face_encoding_list, f)
+            # pickle.dump(face_encodings, f)
 
-    def save_db(self, dirname):
+    def save_db(self, dirname, save_face=False):
         try:
             if not os.path.isdir(dirname):
                 os.mkdir(dirname)
             for person in self.persons:
-                person.save_faces(dirname)
-            self.unknown.save_faces(dirname)
+                person.save_faces(dirname, image_save=save_face)
+            if save_face:
+                self.unknown.save_faces(dirname, image_save=save_face)
             self.save_encodings(dirname)
         except Exception as e:
             print(f'[ERROR] Cannot save Person DB by {e}')

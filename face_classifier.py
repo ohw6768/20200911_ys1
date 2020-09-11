@@ -1,3 +1,4 @@
+import copy
 import face_recognition
 from datetime import datetime
 from collections import Counter
@@ -146,6 +147,8 @@ if __name__ == '__main__':
                       help="people name to want detect.")
     args.add_argument("-f", "--frame", default=30, type=int,
                       help="frames between capture")
+    args.add_argument("--save_face", action='store_true',
+                      help="if you want save faces, set this option")
     _args = args.parse_args()
 
     if _args.stop < _args.skip:
@@ -216,10 +219,14 @@ if __name__ == '__main__':
     pdb = PersonDB()
     pdb.load_db(result_dir)
     # pdb.print_persons()
-    for name in pdb.known_name:
+    temp_known_name = copy.deepcopy(pdb.known_name)
+    for name in temp_known_name:
         if name in name_list:
             idx = name_list.index(name)
             name_list.pop(idx)
+        else:
+            idx = pdb.known_name.index(name)
+            pdb.known_name.pop(idx)
 
     fc = FaceClassifier(_args.threshold, _args.resize_ratio)
     frame_idx = 0
@@ -290,7 +297,7 @@ if __name__ == '__main__':
     running = False
     video.release()
 
-    pdb.save_db(result_dir)
+    pdb.save_db(result_dir, save_face=_args.save_face)
     # pdb.print_persons()
     print('Detected named person list : ')
     for name in detected_named_list:
